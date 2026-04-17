@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏行业记忆大师 - 测试版</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #1890ff;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #222;
+            margin: 20px 0;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            background: #1890ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 20px 0;
+        }
+        .info-box {
+            background: rgba(255,255,255,0.1);
+            padding: 10px 20px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 游戏行业记忆大师</h1>
+        <p>匹配游戏行业术语和解释，边玩边学！</p>
+        
+        <div class="info">
+            <div class="info-box">时间: <span id="timer">90</span>秒</div>
+            <div class="info-box">分数: <span id="score">0</span></div>
+            <div class="info-box">尝试: <span id="attempts">0</span></div>
+        </div>
+        
+        <div class="controls">
+            <button id="start-btn">开始游戏</button>
+            <button id="reset-btn">重新开始</button>
+            <select id="difficulty">
+                <option value="easy">简单</option>
+                <option value="medium">中等</option>
+                <option value="hard">困难</option>
+            </select>
+        </div>
+        
+        <canvas id="game-board" width="800" height="500"></canvas>
+        
+        <div style="margin-top: 20px; color: #aaa;">
+            <p>由"三剑客游戏工坊"开发 | 熊二的扣子助手 × 扬程Bot × 扣子虾HHD</p>
+            <p style="font-size: 12px;">版本: 1.0.0-alpha | 开发时间: 2026-04-17</p>
+        </div>
+    </div>
+
+    <script>
+        const cards = [
+            {id:1, term:"Roblox", def:"UGC游戏平台", type:"term"},
+            {id:1, term:"Roblox", def:"UGC游戏平台", type:"def"},
+            {id:2, term:"UGC", def:"用户生成内容", type:"term"},
+            {id:2, term:"UGC", def:"用户生成内容", type:"def"},
+            {id:3, term:"米哈游", def:"原神开发商", type:"term"},
+            {id:3, term:"米哈游", def:"原神开发商", type:"def"},
+            {id:4, term:"AI生成", def:"AI创建内容", type:"term"},
+            {id:4, term:"AI生成", def:"AI创建内容", type:"def"}
+        ];
+
+        class SimpleMemoryGame {
+            constructor() {
+                this.canvas = document.getElementById('game-board');
+                this.ctx = this.canvas.getContext('2d');
+                this.selected = [];
+                this.matched = new Set();
+                this.gameState = 'idle';
+                this.time = 90;
+                this.score = 0;
+                this.attempts = 0;
+                this.timer = null;
+                this.init();
+            }
+            
+            init() {
+                document.getElementById('start-btn').onclick = () => this.start();
+                document.getElementById('reset-btn').onclick = () => this.reset();
+                document.getElementById('difficulty').onchange = (e) => this.setDifficulty(e.target.value);
+                this.canvas.onclick = (e) => this.handleClick(e);
+                this.setupCards();
+                this.draw();
+            }
+            
+            setupCards() {
+                this.cards = [...cards];
+                for (let i = this.cards.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [this.cards[i], this.cards[j]] = [this.cards[j], this.cards[i]];
+                }
+                
+                this.positions = [];
+                const cols = 4, rows = 2;
+                const cardW = 150, cardH = 100;
+                const startX = (800 - cols * cardW) / 2;
+                const startY = (500 - rows * cardH) / 2;
+                
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const idx = r * cols + c;
+                        if (idx >= this.cards.length) break;
+                        this.positions.push({
+                            x: startX + c * (cardW + 10),
+                            y: startY + r * (cardH + 10),
+                            w: cardW, h: cardH, idx
+                        });
+                    }
+                }
+            }
+            
+            draw() {
+                this.ctx.clearRect(0, 0, 800, 500);
+                
+                this.positions.forEach(pos => {
+                    const card = this.cards[pos.idx];
+                    const isSelected = this.selected.includes(pos.idx);
+                    const isMatched = this.matched.has(card.id);
+                    
+                    this.ctx.fillStyle = isMatched ? '#2ecc71' : 
+                                       isSelected ? (card.type === 'term' ? '#3498db' : '#e74c3c') : '#34495e';
+                    this.ctx.fillRect(pos.x, pos.y, pos.w, pos.h);
+                    this.ctx.strokeStyle = '#fff';
+                    this.ctx.strokeRect(pos.x, pos.y, pos.w, pos.h);
+                    
+                    this.ctx.fillStyle = '#fff';
+                    this.ctx.font = 'bold 16px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    
+                    if (isSelected || isMatched) {
+                        const text = card.type === 'term' ? card.term : card.def;
+                        this.ctx.fillText(text, pos.x + pos.w/2, pos.y + pos.h/2);
+                    } else {
+                        this.ctx.fillText('?', pos.x + pos.w/2, pos.y + pos.h/2);
+                    }
+                });
+            }
+            
+            handleClick(e) {
+                if (this.gameState !== 'playing') return;
+                
+                const rect = this.canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const clicked = this.positions.find(pos => 
+                    x >= pos.x && x <= pos.x + pos.w &&
+                    y >= pos.y && y <= pos.y + pos.h
+                );
+                
+                if (!clicked) return;
+                
+                const idx = clicked.idx;
+                if (this.matched.has(this.cards[idx].id) || this.selected.includes(idx)) return;
+                
+                this.selected.push(idx);
+                
+                if (this.selected.length === 2) {
+                    const [a, b] = this.selected;
+                    const cardA = this.cards[a];
+                    const cardB = this.cards[b];
+                    
+                    this.attempts++;
+                    document.getElementById('attempts').textContent = this.attempts;
+                    
+                    if (cardA.id === cardB.id) {
+                        this.matched.add(cardA.id);
+                        this.score += 100;
+                        document.getElementById('score').textContent = this.score;
+                        
+                        if (this.matched.size === cards.length/2) {
+                            setTimeout(() => {
+                                alert(`🎉 游戏完成！\n得分: ${this.score}\n用时: ${90-this.time}秒\n尝试: ${this.attempts}次`);
+                                this.gameState = 'idle';
+                            }, 500);
+                        }
+                        
+                        setTimeout(() => {
+                            this.selected = [];
+                            this.draw();
+                        }, 1000);
+                    } else {
+                        setTimeout(() => {
+                            this.selected = [];
+                            this.draw();
+                        }, 1000);
+                    }
+                }
+                
+                this.draw();
+            }
+            
+            start() {
+                if (this.gameState === 'playing') return;
+                this.gameState = 'playing';
+                this.time = 90;
+                this.score = 0;
+                this.attempts = 0;
+                this.selected = [];
+                this.matched.clear();
+                
+                document.getElementById('timer').textContent = this.time;
+                document.getElementById('score').textContent = this.score;
+                document.getElementById('attempts').textContent = this.attempts;
+                
+                this.timer = setInterval(() => {
+                    this.time--;
+                    document.getElementById('timer').textContent = this.time;
+                    
+                    if (this.time <= 0) {
+                        clearInterval(this.timer);
+                        alert(`⏰ 时间到！\n得分: ${this.score}\n匹配: ${this.matched.size}对`);
+                        this.gameState = 'idle';
+                    }
+                }, 1000);
+                
+                this.setupCards();
+                this.draw();
+            }
+            
+            reset() {
+                clearInterval(this.timer);
+                this.gameState = 'idle';
+                this.time = 90;
+                this.score = 0;
+                this.attempts = 0;
+                this.selected = [];
+                this.matched.clear();
+                
+                document.getElementById('timer').textContent = this.time;
+                document.getElementById('score').textContent = this.score;
+                document.getElementById('attempts').textContent = this.attempts;
+                
+                this.setupCards();
+                this.draw();
+            }
+            
+            setDifficulty(level) {
+                this.reset();
+            }
+        }
+
+        window.onload = () => {
+            window.game = new SimpleMemoryGame();
+        };
+    </script>
+</body>
+</html>
